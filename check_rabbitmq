@@ -67,7 +67,7 @@ class RabbitMQCheck(Plugin):
                 # Build a response and exit. This `response_for_value` automatically
                 # creates a response with the proper status given the value and the
                 # warning/critical ranges passed in via the command line.
-                nagios_response = self.response_for_value(nb_consumers)
+                nagios_response = self.response_for_value(nb_consumers, "nb_consumers: " + str(nb_consumers))
                 nagios_response.set_perf_data(self.options.queue +"_consumers", nb_consumers)
             else:
                 nagios_response = Response(pynagios.UNKNOWN, "no response from API at " + self.url + " Check username and password")
@@ -81,7 +81,7 @@ class RabbitMQCheck(Plugin):
                 # Build a response and exit. This `response_for_value` automatically
                 # creates a response with the proper status given the value and the
                 # warning/critical ranges passed in via the command line.
-                nagios_response = self.response_for_value(nb_connections)
+                nagios_response = self.response_for_value(nb_connections, "nb_connections: " + str(nb_connections))
                 nagios_response.set_perf_data("connections", nb_connections)
             else:
                 nagios_response = Response(pynagios.UNKNOWN, "no response from API at " + self.url + " Check username and password")
