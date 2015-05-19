@@ -1,0 +1,94 @@
+#!/usr/bin/env /usr/bin/python
+
+import urllib2
+import json
+import sys
+import pynagios
+from pynagios import Plugin, make_option, Response
+
+class RabbitMQCheck(Plugin):
+    """
+    Nagios plugin to check:
+    RabbitMQ open connections
+    RabbitMQ queue consumers
+    """
+    action = make_option("-A", "--action", dest="action", help="connections or consumers (default: connections)", type="string", default="connections")
+    username = make_option("-u", "--username", dest="username", help="RabbitMQ username (default: guest)", type="string", default="guest")
+    password = make_option("-p", "--password", dest="password", help="RabbitMQ password (default: guest)", type="string", default="guest")
+    port = make_option("-P", "--port", dest="port", help="RabbitMQ Management port (default: 15672)", type="string", default="15672")
+    vhost = make_option("-V", "--vhost", dest="vhost", help="RabbitMQ vhost (default: /)", type="string", default='%2F')
+    queue = make_option("-Q", "--queue", dest="queue", help="Name of the queue - Mandatory with consumers action", type="string", default="queue")
+
+    def makeQueueUrl(self):
+        """
+        forms self.url, a correct url for a rabbitMQ queue
+        """
+        self.url = "https://%s:%s/api/queues/%s/%s" % (self.options.hostname,
+                    self.options.port, self.options.vhost, self.options.queue)
+
+    def makeConnectionUrl(self):
+        """
+        forms self.url, a correct url for RabbitMQ connections
+        """
+        self.url = "https://%s:%s/api/connections" % (self.options.hostname,
+                    self.options.port)
+
+    def doApiGet(self):
+        """
+        performs and returns content from an api get
+        """
+        password_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
+        password_mgr.add_password(None, self.url, self.options.username, self.options.password)
+        handler = urllib2.HTTPBasicAuthHandler(password_mgr)
+        opener = urllib2.build_opener(handler)
+
+        try:
+            request = opener.open(self.url)
+            response = request.read()
+            request.close()
+        except Exception, e:
+            response = False
+        return response
+
+    def parseJson(self, response):
+        """
+        parse test and return api json
+        """
+        data = json.loads(response)
+        return data
+
+    def check(self):
+        if self.options.action == "consumers":
+            self.makeQueueUrl()
+            response = self.doApiGet()
+            if response:
+                data = self.parseJson(response)
+                nb_consumers = data['consumers']
+                # Build a response and exit. This `response_for_value` automatically
+                # creates a response with the proper status given the value and the
+                # warning/critical ranges passed in via the command line.
+                nagios_response = self.response_for_value(nb_consumers)
+                nagios_response.set_perf_data(self.options.queue +"_consumers", nb_consumers)
+            else:
+                nagios_response = Response(pynagios.UNKNOWN, "no response from API at " + self.url + " Check username and password")
+            return nagios_response
+        elif self.options.action == "connections":
+            self.makeConnectionUrl()
+            response = self.doApiGet()
+            if response:
+                data = self.parseJson(response)
+                nb_connections = len(data)
+                # Build a response and exit. This `response_for_value` automatically
+                # creates a response with the proper status given the value and the
+                # warning/critical ranges passed in via the command line.
+                nagios_response = self.response_for_value(nb_connections)
+                nagios_response.set_perf_data("connections", nb_connections)
+            else:
+                nagios_response = Response(pynagios.UNKNOWN, "no response from API at " + self.url + " Check username and password")
+            return nagios_response
+        else:
+            print "ERROR: --action must be equal to consumers or connections"
+            sys.exit(0)
+
+if __name__ == '__main__':
+    RabbitMQCheck().check().exit()
